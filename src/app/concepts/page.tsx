@@ -10,7 +10,7 @@ type Concept = {
   titleJa: string;
   summary: string | null;
   tags: string[];
-  layerEntries: { layerId: string; layer: { slug: string } }[];
+  layerEntries: { layerId: string; layer: { slug: string; nameJa: string } }[];
 };
 
 export default function ConceptsPage() {
