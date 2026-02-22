@@ -24,23 +24,34 @@ export async function POST(req: NextRequest) {
   const { conceptIds, layerSlug } = parsed.data;
   const inputHash = createHash(JSON.stringify({ conceptIds, layerSlug }));
 
-  const concepts = await prisma.concept.findMany({
-    where: { id: { in: conceptIds } },
-    include: {
-      layerEntries: {
-        include: { layer: { select: { id: true, slug: true, nameJa: true, index: true } } },
-        orderBy: { layer: { index: "asc" } },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let concepts: any[] = [];
+  try {
+    concepts = await prisma.concept.findMany({
+      where: { id: { in: conceptIds } },
+      include: {
+        layerEntries: {
+          include: { layer: { select: { id: true, slug: true, nameJa: true, index: true } } },
+          orderBy: { layer: { index: "asc" } },
+        },
       },
-    },
-  });
+    });
+  } catch {
+    return NextResponse.json({ error: "DBテーブルが未作成です。/admin でマイグレーションを実行してください。" }, { status: 503 });
+  }
 
   if (concepts.length < 2) {
     return NextResponse.json({ error: "2つ以上の概念が必要です" }, { status: 400 });
   }
 
-  const terms = await prisma.dictionaryTerm.findMany({
-    include: { layer: { select: { slug: true } } },
-  });
+  let terms: { term: string; weight: number; isNegation: boolean; layerId: string; layer: { slug: string } }[] = [];
+  try {
+    terms = await prisma.dictionaryTerm.findMany({
+      include: { layer: { select: { slug: true } } },
+    });
+  } catch {
+    // dictionary not ready
+  }
   const dictEntries: DictEntry[] = terms.map((t) => ({
     term: t.term,
     weight: t.weight,
@@ -67,15 +78,21 @@ export async function POST(req: NextRequest) {
     };
   });
 
-  const run = await prisma.run.create({
-    data: {
-      runType: "compare",
-      inputHash,
-      artifacts: {
-        create: [{ key: "results", value: results as unknown as object }],
+  let runId = "no-db";
+  try {
+    const run = await prisma.run.create({
+      data: {
+        runType: "compare",
+        inputHash,
+        artifacts: {
+          create: [{ key: "results", value: results as unknown as object }],
+        },
       },
-    },
-  });
+    });
+    runId = run.id;
+  } catch {
+    // runs table not ready
+  }
 
-  return NextResponse.json({ runId: run.id, results });
+  return NextResponse.json({ runId, results });
 }

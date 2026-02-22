@@ -25,12 +25,17 @@ export async function POST(req: NextRequest) {
     const { text } = parsed.data;
     const inputHash = createHash(text);
 
-    // Check cache
-    const cached = await prisma.run.findFirst({
-      where: { inputHash, runType: "analysis" },
-      include: { artifacts: true },
-      orderBy: { createdAt: "desc" },
-    });
+    // Check cache (skip if table doesn't exist yet)
+    let cached = null;
+    try {
+      cached = await prisma.run.findFirst({
+        where: { inputHash, runType: "analysis" },
+        include: { artifacts: true },
+        orderBy: { createdAt: "desc" },
+      });
+    } catch {
+      // runs table not yet created – skip cache lookup
+    }
     if (cached) {
       const result = cached.artifacts.reduce(
         (acc, a) => ({ ...acc, [a.key]: a.value }),
@@ -39,14 +44,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ runId: cached.id, cached: true, ...result });
     }
 
-    // Load dictionary
-    const terms = await prisma.dictionaryTerm.findMany({
-      include: { layer: { select: { slug: true } } },
-    });
+    // Load dictionary (skip if table doesn't exist yet)
+    let terms: { term: string; weight: number; isNegation: boolean; layerId: string; layer: { slug: string } }[] = [];
+    try {
+      terms = await prisma.dictionaryTerm.findMany({
+        include: { layer: { select: { slug: true } } },
+      });
+    } catch {
+      // dictionary_terms table not yet created
+    }
 
     if (terms.length === 0) {
       return NextResponse.json(
-        { error: "辞書データが登録されていません。管理者に連絡してください。" },
+        { error: "辞書データが未登録です。/admin から「マイグレーション実行」→「シードデータ投入」を行ってください。" },
         { status: 503 }
       );
     }
@@ -72,27 +82,33 @@ export async function POST(req: NextRequest) {
     );
     const highlights = generateHighlightSpans(text, matchedTerms);
 
-    // Persist run
-    const run = await prisma.run.create({
-      data: {
-        runType: "analysis",
-        inputHash,
-        artifacts: {
-          create: [
-            { key: "scores", value: analysisResult.scores as unknown as object },
-            { key: "dominantLayer", value: analysisResult.dominantLayer },
-            { key: "crossoverDegree", value: analysisResult.crossoverDegree },
-            { key: "entropy", value: analysisResult.entropy },
-            { key: "decompositionHints", value: analysisResult.decompositionHints as unknown as object },
-            { key: "highlights", value: highlights as unknown as object },
-            { key: "inputText", value: text },
-          ],
+    // Persist run (skip if table doesn't exist yet)
+    let runId = "no-db";
+    try {
+      const run = await prisma.run.create({
+        data: {
+          runType: "analysis",
+          inputHash,
+          artifacts: {
+            create: [
+              { key: "scores", value: analysisResult.scores as unknown as object },
+              { key: "dominantLayer", value: analysisResult.dominantLayer },
+              { key: "crossoverDegree", value: analysisResult.crossoverDegree },
+              { key: "entropy", value: analysisResult.entropy },
+              { key: "decompositionHints", value: analysisResult.decompositionHints as unknown as object },
+              { key: "highlights", value: highlights as unknown as object },
+              { key: "inputText", value: text },
+            ],
+          },
         },
-      },
-    });
+      });
+      runId = run.id;
+    } catch {
+      // runs table not yet created – skip persistence
+    }
 
     return NextResponse.json({
-      runId: run.id,
+      runId,
       cached: false,
       scores: analysisResult.scores,
       dominantLayer: analysisResult.dominantLayer,

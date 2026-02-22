@@ -2,6 +2,7 @@
 const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["bcryptjs"],
+    instrumentationHook: true,
   },
   async headers() {
     return [

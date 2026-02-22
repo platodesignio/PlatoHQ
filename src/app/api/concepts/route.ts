@@ -26,18 +26,21 @@ export async function GET(req: NextRequest) {
   if (q) where.titleJa = { contains: q };
   if (published === "true") where.isPublished = true;
 
-  const [total, concepts] = await Promise.all([
-    prisma.concept.count({ where }),
-    prisma.concept.findMany({
-      where,
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      include: { layerEntries: { include: { layer: true } } },
-    }),
-  ]);
-
-  return NextResponse.json({ concepts, total, page, limit });
+  try {
+    const [total, concepts] = await Promise.all([
+      prisma.concept.count({ where }),
+      prisma.concept.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: { layerEntries: { include: { layer: true } } },
+      }),
+    ]);
+    return NextResponse.json({ concepts, total, page, limit });
+  } catch {
+    return NextResponse.json({ concepts: [], total: 0, page, limit });
+  }
 }
 
 export async function POST(req: NextRequest) {
