@@ -84,7 +84,12 @@
       "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\":*)",
       "Bash(node:*)",
       "Bash(export PATH=\"/usr/bin:/usr/local/bin:/c/Program Files/nodejs:$PATH\")",
-      "Bash(export PATH:*)"
+      "Bash(export PATH:*)",
+      "Bash(vercel:*)",
+      "Bash(node_modules/.bin/prisma generate:*)",
+      "Bash(export PATH=\"/usr/bin:/usr/local/bin:/c/Program Files/nodejs:/c/Users/sator/AppData/Roaming/npm:$PATH\")",
+      "Bash(prisma generate:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }

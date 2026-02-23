@@ -40,7 +40,7 @@ enum TimelineEventKind {
   REPORT_PUBLISHED
   VOTE_CAST
   SUPPORT_ONCHAIN
-  SUPPORT_STRIPE
+  MEMBERSHIP_PAID
   FRIEND_ACCEPTED
   FOLLOW_ADDED
   COMMENT_ADDED
@@ -85,8 +85,8 @@ enum FlagStatus {
 }
 
 enum SupportKind {
-  STRIPE_MEMBERSHIP
   ONCHAIN_ETH
+  MEMBERSHIP_ETH
 }
 
 enum StpfType {
@@ -144,7 +144,6 @@ model User {
   notifications   Notification[]
   walletConnections WalletConnection[]
   siweNonces      SiweNonce[]
-  stripeCustomer  StripeCustomer?
   networkMembership NetworkMembership?
   supporterBadges SupporterBadge[]
 
@@ -468,49 +467,45 @@ model SupporterBadge {
   @@map("supporter_badges")
 }
 
-// ─── Stripe ───────────────────────────────────────────────────────────────────
-
-model StripeCustomer {
-  id               String   @id @default(cuid())
-  userId           String   @unique
-  stripeCustomerId String   @unique
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  memberships  NetworkMembership[]
-
-  @@map("stripe_customers")
-}
+// ─── Membership (MetaMask / onchain) ──────────────────────────────────────────
 
 model NetworkMembership {
-  id                   String   @id @default(cuid())
-  userId               String   @unique
-  stripeSubscriptionId String   @unique
-  stripePriceId        String
-  stripeCustomerId     String
-  status               String   // active | past_due | canceled | incomplete
-  currentPeriodEnd     DateTime
-  cancelAtPeriodEnd    Boolean  @default(false)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  // 支払い記録
+  txHash           String    @unique   // 最新の支払いTxHash
+  amountWei        String              // 支払額 (wei)
+  chainId          Int                 // Base mainnet = 8453
+  fromAddress      String              // 支払いウォレットアドレス
+  // 有効期限
+  status           String    @default("active") // active | expired | revoked
+  validFrom        DateTime  @default(now())
+  validUntil       DateTime             // 有効期限 (管理者が設定)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  stripeCustomer StripeCustomer @relation(fields: [stripeCustomerId], references: [stripeCustomerId])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([txHash])
   @@map("network_memberships")
 }
 
-model BillingEvent {
-  id            String    @id @default(cuid())
-  stripeEventId String    @unique
-  type          String
-  payloadJson   Json
-  receivedAt    DateTime  @default(now())
-  processedAt   DateTime?
-  processResult String?
+// 支払いトランザクション履歴 (冪等性・監査用)
+model MembershipPayment {
+  id           String    @id @default(cuid())
+  userId       String
+  txHash       String    @unique
+  amountWei    String
+  chainId      Int
+  fromAddress  String
+  status       String    @default("pending") // pending | confirmed | rejected
+  processedAt  DateTime?
+  createdAt    DateTime  @default(now())
 
-  @@map("billing_events")
+  @@index([userId])
+  @@index([txHash])
+  @@map("membership_payments")
 }
 
 // ─── Friends ──────────────────────────────────────────────────────────────────

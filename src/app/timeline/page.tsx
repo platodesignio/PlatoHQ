@@ -14,7 +14,7 @@ const EVENT_LABELS: Record<string, string> = {
   REPORT_PUBLISHED: "報告を公開",
   VOTE_CAST: "投票",
   SUPPORT_ONCHAIN: "オンチェーン支援",
-  SUPPORT_STRIPE: "会費支援",
+  MEMBERSHIP_PAID: "ネットワーク会費支払い",
   FRIEND_ACCEPTED: "友達になりました",
   FOLLOW_ADDED: "プロジェクトをフォロー",
   COMMENT_ADDED: "コメント",

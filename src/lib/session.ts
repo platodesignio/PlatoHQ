@@ -45,10 +45,10 @@ export async function requireSession(): Promise<SessionUser> {
 export async function isNetworkMember(userId: string): Promise<boolean> {
   const membership = await prisma.networkMembership.findUnique({
     where: { userId },
-    select: { status: true, currentPeriodEnd: true },
+    select: { status: true, validUntil: true },
   });
   if (!membership) return false;
-  return membership.status === "active" && membership.currentPeriodEnd > new Date();
+  return membership.status === "active" && membership.validUntil > new Date();
 }
 
 export async function isProjectMember(userId: string, projectId: string): Promise<boolean> {

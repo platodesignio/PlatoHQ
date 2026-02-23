@@ -31,7 +31,7 @@ export async function GET() {
       timelineVisibility: true,
       dmFromFriendsOnly: true,
       createdAt: true,
-      networkMembership: { select: { status: true, currentPeriodEnd: true } },
+      networkMembership: { select: { status: true, validUntil: true, txHash: true, amountWei: true } },
       walletConnections: { select: { address: true, chainId: true, verifiedAt: true } },
       _count: { select: { follows: true, friendshipsA: true, friendshipsB: true } },
     },

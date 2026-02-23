@@ -8,7 +8,7 @@ CREATE TYPE "Visibility" AS ENUM ('PROJECT_ONLY', 'NETWORK_ONLY', 'LINK_ONLY', '
 CREATE TYPE "FriendRequestStatus" AS ENUM ('PENDING', 'ACCEPTED', 'DECLINED', 'BLOCKED', 'CANCELLED');
 
 -- CreateEnum
-CREATE TYPE "TimelineEventKind" AS ENUM ('PROJECT_CREATED', 'PROJECT_UPDATED', 'STPF_NODE_CREATED', 'STPF_NODE_UPDATED', 'REPORT_PUBLISHED', 'VOTE_CAST', 'SUPPORT_ONCHAIN', 'SUPPORT_STRIPE', 'FRIEND_ACCEPTED', 'FOLLOW_ADDED', 'COMMENT_ADDED', 'REPORT_REVISED');
+CREATE TYPE "TimelineEventKind" AS ENUM ('PROJECT_CREATED', 'PROJECT_UPDATED', 'STPF_NODE_CREATED', 'STPF_NODE_UPDATED', 'REPORT_PUBLISHED', 'VOTE_CAST', 'SUPPORT_ONCHAIN', 'MEMBERSHIP_ETH', 'FRIEND_ACCEPTED', 'FOLLOW_ADDED', 'COMMENT_ADDED', 'REPORT_REVISED');
 
 -- CreateEnum
 CREATE TYPE "TimelineVisibility" AS ENUM ('PUBLIC', 'NETWORK_ONLY', 'FRIENDS_ONLY', 'PRIVATE');
@@ -26,7 +26,7 @@ CREATE TYPE "FlagTargetType" AS ENUM ('PROJECT', 'REPORT', 'COMMENT', 'USER', 'E
 CREATE TYPE "FlagStatus" AS ENUM ('OPEN', 'REVIEWING', 'RESOLVED', 'DISMISSED');
 
 -- CreateEnum
-CREATE TYPE "SupportKind" AS ENUM ('STRIPE_MEMBERSHIP', 'ONCHAIN_ETH');
+CREATE TYPE "SupportKind" AS ENUM ('MEMBERSHIP_ETH', 'ONCHAIN_ETH');
 
 -- CreateEnum
 CREATE TYPE "StpfType" AS ENUM ('STRUCTURE_ANALYSIS', 'THEORY_NODE', 'PAPER', 'FIELD_IMPLEMENTATION');
@@ -281,46 +281,6 @@ CREATE TABLE "supporter_badges" (
     "issuedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "supporter_badges_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "stripe_customers" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "stripeCustomerId" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "stripe_customers_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "network_memberships" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "stripeSubscriptionId" TEXT NOT NULL,
-    "stripePriceId" TEXT NOT NULL,
-    "stripeCustomerId" TEXT NOT NULL,
-    "status" TEXT NOT NULL,
-    "currentPeriodEnd" TIMESTAMP(3) NOT NULL,
-    "cancelAtPeriodEnd" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "network_memberships_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "billing_events" (
-    "id" TEXT NOT NULL,
-    "stripeEventId" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "payloadJson" JSONB NOT NULL,
-    "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "processedAt" TIMESTAMP(3),
-    "processResult" TEXT,
-
-    CONSTRAINT "billing_events_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -579,15 +539,10 @@ CREATE INDEX "supports_userId_idx" ON "supports"("userId");
 CREATE UNIQUE INDEX "supporter_badges_supportId_key" ON "supporter_badges"("supportId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "stripe_customers_userId_key" ON "stripe_customers"("userId");
-CREATE UNIQUE INDEX "stripe_customers_stripeCustomerId_key" ON "stripe_customers"("stripeCustomerId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "network_memberships_userId_key" ON "network_memberships"("userId");
-CREATE UNIQUE INDEX "network_memberships_stripeSubscriptionId_key" ON "network_memberships"("stripeSubscriptionId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "billing_events_stripeEventId_key" ON "billing_events"("stripeEventId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "friend_requests_senderId_receiverId_key" ON "friend_requests"("senderId", "receiverId");
@@ -667,9 +622,6 @@ ALTER TABLE "supports" ADD CONSTRAINT "supports_userId_fkey" FOREIGN KEY ("userI
 ALTER TABLE "supporter_badges" ADD CONSTRAINT "supporter_badges_supportId_fkey" FOREIGN KEY ("supportId") REFERENCES "supports"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "supporter_badges" ADD CONSTRAINT "supporter_badges_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "supporter_badges" ADD CONSTRAINT "supporter_badges_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "stripe_customers" ADD CONSTRAINT "stripe_customers_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "network_memberships" ADD CONSTRAINT "network_memberships_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "network_memberships" ADD CONSTRAINT "network_memberships_stripeCustomerId_fkey" FOREIGN KEY ("stripeCustomerId") REFERENCES "stripe_customers"("stripeCustomerId") ON UPDATE CASCADE;
 ALTER TABLE "friend_requests" ADD CONSTRAINT "friend_requests_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "friend_requests" ADD CONSTRAINT "friend_requests_receiverId_fkey" FOREIGN KEY ("receiverId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "friendships" ADD CONSTRAINT "friendships_userAId_fkey" FOREIGN KEY ("userAId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -694,6 +646,53 @@ ALTER TABLE "flags" ADD CONSTRAINT "flags_commentId_fkey" FOREIGN KEY ("commentI
 ALTER TABLE "flags" ADD CONSTRAINT "flags_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "messages"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "feedbacks" ADD CONSTRAINT "feedbacks_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+
+-- CreateTable: NetworkMembership (MetaMask払い)
+CREATE TABLE "network_memberships" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "txHash" TEXT NOT NULL,
+    "amountWei" TEXT NOT NULL,
+    "chainId" INTEGER NOT NULL,
+    "fromAddress" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'active',
+    "validFrom" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "validUntil" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "network_memberships_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable: MembershipPayment (支払い履歴)
+CREATE TABLE "membership_payments" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "txHash" TEXT NOT NULL,
+    "amountWei" TEXT NOT NULL,
+    "chainId" INTEGER NOT NULL,
+    "fromAddress" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "processedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "membership_payments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex: network_memberships
+CREATE UNIQUE INDEX "network_memberships_userId_key" ON "network_memberships"("userId");
+CREATE UNIQUE INDEX "network_memberships_txHash_key" ON "network_memberships"("txHash");
+CREATE INDEX "network_memberships_userId_idx" ON "network_memberships"("userId");
+CREATE INDEX "network_memberships_txHash_idx" ON "network_memberships"("txHash");
+
+-- CreateIndex: membership_payments
+CREATE UNIQUE INDEX "membership_payments_txHash_key" ON "membership_payments"("txHash");
+CREATE INDEX "membership_payments_userId_idx" ON "membership_payments"("userId");
+CREATE INDEX "membership_payments_txHash_idx" ON "membership_payments"("txHash");
+
+-- AddForeignKey: network_memberships
+ALTER TABLE "network_memberships" ADD CONSTRAINT "network_memberships_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- Full-text search triggers for projects
 CREATE OR REPLACE FUNCTION update_project_search_vector()
